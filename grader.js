@@ -22,6 +22,7 @@ References:
 */
 
 var fs = require('fs');
+var rest = require('restler');
 var program = require('commander');
 var cheerio = require('cheerio');
 var HTMLFILE_DEFAULT = "index.html";
@@ -55,6 +56,31 @@ var checkHtmlFile = function(htmlfile, checksfile) {
     return out;
 };
 
+var processmHtmlFileFromUrl = function(htmlfile, checksfile)
+{
+  if( htmlfile != undefined && checksfile != undefined ) {
+     rest.get( htmlfile ).on('complete', function(result) {
+         if( result instanceof Error ) {
+             sys.puts('Error: ' + result.message);
+         } 
+         else {
+               var out = {};
+               var checks = loadChecks(checksfile).sort();
+               $ = cheerio.load( result );
+               for(var ii in checks) {
+                   var present = $(checks[ii]).length > 0;
+                   out[checks[ii]] = present;
+               }
+               console.log( out );
+         }
+     });
+  }
+  else {
+     console.error("Unable to process the url file");  
+     process.exit( 1 );
+  }
+};
+
 var clone = function(fn) {
     // Workaround for commander.js issue.
     // http://stackoverflow.com/a/6772648
@@ -62,13 +88,23 @@ var clone = function(fn) {
 };
 
 if(require.main == module) {
-    program
-        .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
-        .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
-        .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+       program
+       .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists),CHECKSFILE_DEFAULT)
+       .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
+       .parse(process.argv);
+    if( process.argv[1] != undefined && process.argv[2] != undefined) { 
+        if( ( fs.existsSync( ( program.file ).toString() ) ) && ( fs.existsSync( ( program.checks ).toString() ) ) ) {
+            var checkJson = checkHtmlFile(program.file, program.checks);
+            var outJson = JSON.stringify(checkJson, null, 4);
+            console.log(outJson);
+        }
+    }
+    else
+    {
+     var urlpath = 'http://peaceful-atoll-9914.herokuapp.com';
+     var default_check_file = CHECKSFILE_DEFAULT;
+     processmHtmlFileFromUrl( urlpath, default_check_file );
+    }
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
